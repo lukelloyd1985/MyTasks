@@ -90,18 +90,41 @@ class MyTaskListApp : Application(), Configuration.Provider {
         debugToast("2a: initFirebase start")
         val builder = FirebaseOptions.Builder()
         debugToast("2b: Builder() created")
-        builder.setProjectId(BuildConfig.FIREBASE_PROJECT_ID)
-        debugToast("2c: setProjectId done")
-        builder.setApplicationId(BuildConfig.FIREBASE_APPLICATION_ID)
-        debugToast("2d: setApplicationId done")
-        builder.setApiKey(BuildConfig.FIREBASE_API_KEY)
-        debugToast("2e: setApiKey done")
-        builder.setGcmSenderId(BuildConfig.FIREBASE_SENDER_ID)
-        debugToast("2f: setGcmSenderId done")
+
+        // Confirmed on multiple clean uninstall+reinstall runs: dies
+        // right here, between 2b and what was 2c - every checkpoint that
+        // succeeded (1, 2, 2a, 2b) used a plain static string with no
+        // interpolation; 2c was the first to both read a BuildConfig
+        // value AND interpolate it into the toast text. Splitting "read
+        // the constant" (2c, static text only) from "display it
+        // interpolated" (2c-show) isolates which one is actually
+        // implicated, rather than assuming it's Firebase-related at all.
+        val projectId = BuildConfig.FIREBASE_PROJECT_ID
+        debugToast("2c: read FIREBASE_PROJECT_ID (not shown)")
+        debugToast("2c-show: FIREBASE_PROJECT_ID = [$projectId]")
+        builder.setProjectId(projectId)
+        debugToast("2d: setProjectId done")
+
+        val applicationId = BuildConfig.FIREBASE_APPLICATION_ID
+        debugToast("2e: read FIREBASE_APPLICATION_ID (not shown)")
+        debugToast("2e-show: FIREBASE_APPLICATION_ID = [$applicationId]")
+        builder.setApplicationId(applicationId)
+        debugToast("2f: setApplicationId done")
+
+        val apiKey = BuildConfig.FIREBASE_API_KEY
+        debugToast("2g: FIREBASE_API_KEY = [$apiKey]")
+        builder.setApiKey(apiKey)
+        debugToast("2h: setApiKey done")
+
+        val senderId = BuildConfig.FIREBASE_SENDER_ID
+        debugToast("2i: FIREBASE_SENDER_ID = [$senderId]")
+        builder.setGcmSenderId(senderId)
+        debugToast("2j: setGcmSenderId done")
+
         val options = builder.build()
-        debugToast("2g: options built")
+        debugToast("2k: options built")
         FirebaseApp.initializeApp(this, options)
-        debugToast("2h: FirebaseApp.initializeApp() returned")
+        debugToast("2l: FirebaseApp.initializeApp() returned")
     }
 
     override val workManagerConfiguration: Configuration
