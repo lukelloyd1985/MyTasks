@@ -2,8 +2,6 @@ package com.github.lukelloyd1985.mytasklist
 
 import android.app.Application
 import android.content.Intent
-import android.os.Handler
-import android.os.Looper
 import android.os.Process
 import android.util.Log
 import android.widget.Toast
@@ -20,7 +18,7 @@ import kotlin.system.exitProcess
 class MyTaskListApp : Application(), Configuration.Provider {
 
     companion object {
-        private const val LAST_CHECKPOINT_KEY = "last_checkpoint"
+        private const val LOG_KEY = "debug_log"
     }
 
     @Inject lateinit var workerFactory: HiltWorkerFactory
@@ -33,7 +31,7 @@ class MyTaskListApp : Application(), Configuration.Provider {
         // same way. These bisect *inside* the function to find the exact
         // failing line, since "somewhere in initFirebase()" wasn't enough
         // last time. Remove once the cause is found.
-        showLastCheckpoint()
+        showPreviousRunLog()
         debugToast("1: App.onCreate start")
         installCrashHandler()
         debugToast("2: crash handler installed")
@@ -43,25 +41,38 @@ class MyTaskListApp : Application(), Configuration.Provider {
         debugToast("4: App.onCreate complete")
     }
 
-    // Whatever kills this process (even something below Java exception
-    // handling) happens well before a LENGTH_SHORT toast queued behind
-    // several others would finish displaying, so there's no reliable way
-    // to read the *last* checkpoint reached in the same run it's shown.
-    // Persisting it here (commit(), not apply() - must be durable before
-    // this function returns, since the process may not survive much
-    // longer) and showing it back on the *next* launch, alone and with
-    // LENGTH_LONG, removes the timing problem entirely.
-    private fun showLastCheckpoint() {
-        val last = debugPrefs().getString(LAST_CHECKPOINT_KEY, null)
-        if (last != null) {
-            Toast.makeText(this, "PREVIOUS RUN reached: $last", Toast.LENGTH_LONG).show()
+    // A Toast can't be selected/copied, wraps or truncates long text
+    // (an exception's class+message, or a stack trace, routinely
+    // doesn't fit), and disappears in ~2s regardless - none of which is
+    // acceptable for reading back exactly where and why a run died.
+    // Every checkpoint this run is appended to a persisted log
+    // (commit(), not apply() - must be durable before returning, since
+    // the process may not survive much longer); on the *next* launch,
+    // before anything else, that whole log is shown on its own full
+    // screen (DebugLogActivity - selectable, scrollable, shareable),
+    // then cleared so each run's screen shows only that run's log.
+    private fun showPreviousRunLog() {
+        val log = debugPrefs().getString(LOG_KEY, null)
+        if (!log.isNullOrBlank()) {
+            startActivity(
+                Intent(this, DebugLogActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    putExtra(DebugLogActivity.EXTRA_LOG, "PREVIOUS RUN:\n\n$log")
+                },
+            )
         }
+        debugPrefs().edit().putString(LOG_KEY, "").commit()
     }
 
     private fun debugPrefs() = getSharedPreferences("debug", MODE_PRIVATE)
 
+    private fun appendLog(message: String) {
+        val existing = debugPrefs().getString(LOG_KEY, "").orEmpty()
+        debugPrefs().edit().putString(LOG_KEY, existing + message + "\n").commit()
+    }
+
     private fun debugToast(message: String) {
-        debugPrefs().edit().putString(LAST_CHECKPOINT_KEY, message).commit()
+        appendLog(message)
         Toast.makeText(this, "DEBUG $message", Toast.LENGTH_SHORT).show()
     }
 
@@ -84,19 +95,16 @@ class MyTaskListApp : Application(), Configuration.Provider {
     private fun installCrashHandler() {
         val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            // TEMPORARY diagnostic: fires unconditionally the instant this
-            // handler runs, before anything else below, on the main
-            // thread regardless of which thread actually crashed - so we
-            // find out in the same test round whether this is even a
-            // catchable Kotlin/Java exception this time, rather than
-            // needing a separate upload+test cycle just to check.
-            val crashMessage = "X: crash handler invoked, thread=${thread.name}, throwable=${throwable::class.java.name}: ${throwable.message}"
-            debugPrefs().edit().putString(LAST_CHECKPOINT_KEY, crashMessage).commit()
-            Handler(Looper.getMainLooper()).post {
-                Toast.makeText(this, "DEBUG $crashMessage", Toast.LENGTH_LONG).show()
-            }
+            // Logged (full stack trace, no truncation) and committed to
+            // disk before anything else below - CrashReportActivity is
+            // meant to show this same trace immediately, but if the
+            // process dies before that Activity manages to draw (as
+            // previously observed even with a delay added here - see
+            // git history), this is what's shown on the *next* launch
+            // instead, via showPreviousRunLog().
+            val stackTrace = Log.getStackTraceString(throwable)
+            appendLog("X: crash handler invoked, thread=${thread.name}\n$stackTrace")
             try {
-                val stackTrace = Log.getStackTraceString(throwable)
                 startActivity(
                     Intent(this, CrashReportActivity::class.java).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)

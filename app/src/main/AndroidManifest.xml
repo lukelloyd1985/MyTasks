@@ -39,6 +39,11 @@
             android:name=".CrashReportActivity"
             android:exported="false" />
 
+        <!-- See DebugLogActivity's own comment - likewise temporary. -->
+        <activity
+            android:name=".DebugLogActivity"
+            android:exported="false" />
+
         <service
             android:name=".notifications.MyTaskListMessagingService"
             android:exported="false">
