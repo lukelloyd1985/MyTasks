@@ -65,6 +65,18 @@ class MyTaskListApp : Application(), Configuration.Provider {
         Toast.makeText(this, "DEBUG $message", Toast.LENGTH_SHORT).show()
     }
 
+    // TEMPORARY: reads a BuildConfig String value and checkpoints three
+    // separate operations on it, since "reaches the read but not the
+    // interpolated display" (2c vs 2c-show) wasn't fine-grained enough -
+    // see initFirebase()'s own comment for what each step isolates.
+    private fun bisectValue(name: String, value: String): String {
+        debugToast("2x-read($name): length=${value.length}")
+        val shown = "2x-show($name): [$value]"
+        debugToast("2x-built($name): interpolated string built OK")
+        debugToast(shown)
+        return value
+    }
+
     // See CrashReportActivity's own comment for why this exists. Falls
     // through to the platform's own default handler (which shows the
     // usual "App keeps stopping" dialog) if launching the crash screen
@@ -116,33 +128,32 @@ class MyTaskListApp : Application(), Configuration.Provider {
         val builder = FirebaseOptions.Builder()
         debugToast("2b: Builder() created")
 
-        // Confirmed on multiple clean uninstall+reinstall runs: dies
-        // right here, between 2b and what was 2c - every checkpoint that
-        // succeeded (1, 2, 2a, 2b) used a plain static string with no
-        // interpolation; 2c was the first to both read a BuildConfig
-        // value AND interpolate it into the toast text. Splitting "read
-        // the constant" (2c, static text only) from "display it
-        // interpolated" (2c-show) isolates which one is actually
-        // implicated, rather than assuming it's Firebase-related at all.
-        val projectId = BuildConfig.FIREBASE_PROJECT_ID
-        debugToast("2c: read FIREBASE_PROJECT_ID (not shown)")
-        debugToast("2c-show: FIREBASE_PROJECT_ID = [$projectId]")
+        // Confirmed reproducible: dies between 2b and 2c-show - every
+        // checkpoint up to and including 2c (plain static text, no
+        // interpolation of the actual BuildConfig value) has been
+        // reached; 2c-show (interpolates the real value into the toast
+        // text) has not. bisectValue() below splits that further: is
+        // *any* interpolation into a toast fatal at this point (2x-read,
+        // which interpolates a safe Int - value.length), is evaluating the string
+        // template with the real value fatal even before it reaches a
+        // Toast/SharedPreferences call at all (2x-built), or is it
+        // specifically persisting/displaying the real value that's fatal
+        // (2x-show)? Applied to all four BuildConfig reads up front so a
+        // Play-test round that gets further than projectId doesn't need
+        // yet another cycle just to add the same split.
+        val projectId = bisectValue("projectId", BuildConfig.FIREBASE_PROJECT_ID)
         builder.setProjectId(projectId)
         debugToast("2d: setProjectId done")
 
-        val applicationId = BuildConfig.FIREBASE_APPLICATION_ID
-        debugToast("2e: read FIREBASE_APPLICATION_ID (not shown)")
-        debugToast("2e-show: FIREBASE_APPLICATION_ID = [$applicationId]")
+        val applicationId = bisectValue("applicationId", BuildConfig.FIREBASE_APPLICATION_ID)
         builder.setApplicationId(applicationId)
         debugToast("2f: setApplicationId done")
 
-        val apiKey = BuildConfig.FIREBASE_API_KEY
-        debugToast("2g: FIREBASE_API_KEY = [$apiKey]")
+        val apiKey = bisectValue("apiKey", BuildConfig.FIREBASE_API_KEY)
         builder.setApiKey(apiKey)
         debugToast("2h: setApiKey done")
 
-        val senderId = BuildConfig.FIREBASE_SENDER_ID
-        debugToast("2i: FIREBASE_SENDER_ID = [$senderId]")
+        val senderId = bisectValue("senderId", BuildConfig.FIREBASE_SENDER_ID)
         builder.setGcmSenderId(senderId)
         debugToast("2j: setGcmSenderId done")
 
