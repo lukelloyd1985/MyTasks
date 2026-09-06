@@ -201,7 +201,7 @@ jobs:
             app/build/outputs/apk/release/*.apk
             app/build/outputs/bundle/release/*.aab
 
-      # Uploads the AAB straight to the Play Console "internal testing"
+      # Uploads the AAB straight to the Play Console "closed testing"
       # track - never production, see README "Publishing to Google Play".
       # Requires the app to already exist in Play Console and its very
       # first release to have been done manually there; see the README for
@@ -217,7 +217,7 @@ jobs:
       # input change makes Gradle re-run signReleaseBundle right here with
       # a null password, which fails with a message-less
       # NullPointerException from bundletool.
-      - name: Publish to Google Play (internal track)
+      - name: Publish to Google Play
         if: ${{ github.event_name == 'release' && env.HAS_PLAY_SERVICE_ACCOUNT_SECRET == 'true' }}
         env:
           ANDROID_PUBLISHER_CREDENTIALS: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
