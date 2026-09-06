@@ -19,6 +19,10 @@ import kotlin.system.exitProcess
 @HiltAndroidApp
 class MyTaskListApp : Application(), Configuration.Provider {
 
+    companion object {
+        private const val LAST_CHECKPOINT_KEY = "last_checkpoint"
+    }
+
     @Inject lateinit var workerFactory: HiltWorkerFactory
 
     override fun onCreate() {
@@ -29,6 +33,7 @@ class MyTaskListApp : Application(), Configuration.Provider {
         // same way. These bisect *inside* the function to find the exact
         // failing line, since "somewhere in initFirebase()" wasn't enough
         // last time. Remove once the cause is found.
+        showLastCheckpoint()
         debugToast("1: App.onCreate start")
         installCrashHandler()
         debugToast("2: crash handler installed")
@@ -38,7 +43,25 @@ class MyTaskListApp : Application(), Configuration.Provider {
         debugToast("4: App.onCreate complete")
     }
 
+    // Whatever kills this process (even something below Java exception
+    // handling) happens well before a LENGTH_SHORT toast queued behind
+    // several others would finish displaying, so there's no reliable way
+    // to read the *last* checkpoint reached in the same run it's shown.
+    // Persisting it here (commit(), not apply() - must be durable before
+    // this function returns, since the process may not survive much
+    // longer) and showing it back on the *next* launch, alone and with
+    // LENGTH_LONG, removes the timing problem entirely.
+    private fun showLastCheckpoint() {
+        val last = debugPrefs().getString(LAST_CHECKPOINT_KEY, null)
+        if (last != null) {
+            Toast.makeText(this, "PREVIOUS RUN reached: $last", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun debugPrefs() = getSharedPreferences("debug", MODE_PRIVATE)
+
     private fun debugToast(message: String) {
+        debugPrefs().edit().putString(LAST_CHECKPOINT_KEY, message).commit()
         Toast.makeText(this, "DEBUG $message", Toast.LENGTH_SHORT).show()
     }
 
@@ -55,8 +78,10 @@ class MyTaskListApp : Application(), Configuration.Provider {
             // find out in the same test round whether this is even a
             // catchable Kotlin/Java exception this time, rather than
             // needing a separate upload+test cycle just to check.
+            val crashMessage = "X: crash handler invoked, thread=${thread.name}, throwable=${throwable::class.java.name}: ${throwable.message}"
+            debugPrefs().edit().putString(LAST_CHECKPOINT_KEY, crashMessage).commit()
             Handler(Looper.getMainLooper()).post {
-                Toast.makeText(this, "DEBUG X: crash handler invoked, thread=${thread.name}, throwable=${throwable::class.java.name}: ${throwable.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "DEBUG $crashMessage", Toast.LENGTH_LONG).show()
             }
             try {
                 val stackTrace = Log.getStackTraceString(throwable)
