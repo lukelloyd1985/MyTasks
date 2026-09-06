@@ -526,7 +526,7 @@ produces an installable APK even before you've set up a keystore.
   an Android App Bundle (`.aab`, what Google Play requires), attaches both
   to that release (and to the workflow run as artifacts), and - if the
   `PLAY_SERVICE_ACCOUNT_JSON` secret is set - uploads the AAB to Google
-  Play's internal testing track. See
+  Play's closed testing track. See
   [Publishing to Google Play](#publishing-to-google-play) below.
 
 To get a properly **signed** release build (instead of the debug-keystore
@@ -669,9 +669,9 @@ everything after that, which CI automates.
    a mismatched default language.
 5. **Do the first release by hand.** Build an AAB
    (`./gradlew bundleRelease`, or download one from a GitHub Release once
-   you've tagged one - see below), go to Testing → Internal testing →
+   you've tagged one - see below), go to Testing → Closed testing →
    *Create new release*, upload it, add release notes, and roll it out.
-   Add yourself (and any other testers) as an internal tester so you can
+   Add yourself (and any other testers) as a closed tester so you can
    install it.
 
    **This first upload also enrolls the app in Play App Signing** (Google's
@@ -759,10 +759,10 @@ everything after that, which CI automates.
    repository secret (Settings → Secrets and variables → Actions) -
    paste the raw JSON, not base64.
 4. From then on, **publishing a GitHub Release** builds the AAB and runs
-   `publishReleaseBundle`, which uploads it straight to the **internal
+   `publishReleaseBundle`, which uploads it straight to the **closed
    testing** track with `releaseStatus = COMPLETED` (see the `play { }`
    block in `app/build.gradle.kts`). CI never touches the production
-   track - promote a release from internal testing to production
+   track - promote a release from closed testing to production
    yourself in Play Console once you're happy with it. It also runs
    `publishListing`, which pushes the store listing text and graphics
    committed under `app/src/main/play/` - edit those files (and

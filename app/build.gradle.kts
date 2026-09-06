@@ -214,7 +214,11 @@ android {
 // variable (a Play Console service account's JSON key) - so this is a no-op
 // for every other build until that's set.
 play {
-    track.set("internal")
+    // "alpha" is the Play Developer API's identifier for the default
+    // Closed testing track (Play Console's own naming; "internal"/"beta"/
+    // "production" are the other three built-in tracks - a custom-named
+    // closed testing track would need its actual name here instead).
+    track.set("alpha")
     releaseStatus.set(com.github.triplet.gradle.androidpublisher.ReleaseStatus.COMPLETED)
     defaultToAppBundles.set(true)
 }
